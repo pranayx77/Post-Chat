@@ -1,7 +1,7 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/dashboard", "destination": "/dashboard.html" },
-    { "source": "/(.*)", "destination": "/api/index" }
+    { "source": "/dashboard", "destination": "/api/dashboard" },
+    { "source": "/(.*)",      "destination": "/api/index"     }
   ]
 }
