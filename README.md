@@ -11,7 +11,6 @@
 - 🕐 **Date & Time** — real-time IST date/time support
 - 🔀 **Switchable AI Model** — change model via env variable, no code edit needed
 - ⚡ **Serverless** — runs on Vercel via Telegram Webhook
-- 🎮 **BGMI Account Formatter** — converts raw account data into professional listings
 
 ---
 
@@ -25,45 +24,6 @@
 | `/model` | Show current AI model |
 | `/datetime` | Current IST date & time |
 | `/developer` | Developer info |
-| `/bgmi` | 🎮 Activate BGMI account formatter mode |
-| `/chat` | 💬 Exit BGMI mode, return to normal chat |
-
----
-
-## 🎮 BGMI Account Formatter
-
-Type `/bgmi` to enter BGMI mode. Then paste any raw, messy account data and the bot will instantly convert it into a clean professional listing.
-
-**Example Input:**
-```
-rp s12 s13 s14 m1 m2 a7 a8 maxed, 3 mythic sets, 500 uc,
-glacier m416 lv4 hit effect, akm red dawn lv3,
-lvl 65, conqueror, 2 room cards
-```
-
-**Example Output:**
-```
-#G
-|[ BGMI ULTIMATE ACCOUNT ]|
-
-🎮 RP S12, S13, S14, M1, M2
-       A7, A8 MAXED
-
-➖ Mythic Fashion × 3
-💵 500 UC
-
-── Upgradable ──
-🔫 Glacier M416 (Lv. 4) + Hit Effect
-🔫 Red Dawn AKM (Lv. 3)
-
-⛔️ Level   : 65
-⛔️ Tier    : Conqueror
-💳 Room Cards × 2
-
-✍️ LOGIN :
-✍️ PRICE :
-✍️ BUY : @GalaxyAccounts ✅
-```
 
 ---
 
@@ -124,8 +84,6 @@ meta-llama/llama-3-8b-instruct:free
 google/gemma-3-4b-it:free
 ```
 
-> 💡 **Tip:** For BGMI formatting, use `mistralai/mistral-7b-instruct:free` or `meta-llama/llama-3-8b-instruct:free` for best results.
-
 ---
 
 ## ⚠️ Railway vs Vercel
@@ -136,17 +94,15 @@ google/gemma-3-4b-it:free
 | Memory | Persists across messages | Resets on cold start |
 | Cost | Free tier available | Free tier available |
 
-> ⚠️ **Note:** BGMI mode and chat history are stored in-memory. They reset on Vercel cold starts. This is expected behavior for serverless deployments.
-
 ---
 
 ## 📦 Requirements
 
 ```
+python-telegram-bot==21.6
+openai==1.51.0
 requests==2.32.3
 ```
-
-> Pure `requests` only — no heavy frameworks. Fully compatible with Vercel serverless.
 
 ---
 
