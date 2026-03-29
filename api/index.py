@@ -36,34 +36,29 @@ SYSTEM_PROMPT = (
     "If date/time is provided, use it naturally."
 )
 
-MAX_HISTORY = 10  # max messages in history (5 pairs)
+MAX_HISTORY = 10
 
 # ─────────────────────────── LOGGING ──────────────────────────────────────────
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# In-memory history { user_id: [{role, content}] }
 user_histories: dict = {}
 
 # ─────────────────────────── TELEGRAM HELPERS ─────────────────────────────────
 
 def tg_send(chat_id: int, text: str, parse_mode: str = "Markdown") -> None:
-    """Send text message via Telegram Bot API."""
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     try:
-        r = requests.post(url, json={
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": parse_mode,
-        }, timeout=10)
-        r.raise_for_status()
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            json={"chat_id": chat_id, "text": text, "parse_mode": parse_mode},
+            timeout=10,
+        )
     except Exception as e:
-        logger.error("Telegram send error: %s", e)
+        logger.error("tg_send error: %s", e)
 
 
 def tg_typing(chat_id: int) -> None:
-    """Send typing action."""
     try:
         requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendChatAction",
@@ -74,8 +69,7 @@ def tg_typing(chat_id: int) -> None:
         pass
 
 
-def tg_upload_photo(chat_id: int) -> None:
-    """Send upload_photo action — shows camera spinner while generating."""
+def tg_upload_photo_action(chat_id: int) -> None:
     try:
         requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendChatAction",
@@ -86,66 +80,63 @@ def tg_upload_photo(chat_id: int) -> None:
         pass
 
 
-def tg_send_photo(chat_id: int, image_url: str, caption: str = "") -> bool:
-    """Send photo via URL to Telegram."""
+def tg_send_photo_url(chat_id: int, image_url: str, caption: str = "") -> None:
+    """
+    Send photo by giving Telegram the URL directly.
+    Telegram's servers fetch the image — Vercel is NOT in the loop.
+    This completely avoids the 10s Vercel timeout problem.
+    """
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
             json={
-                "chat_id": chat_id,
-                "photo": image_url,
-                "caption": caption,
+                "chat_id":    chat_id,
+                "photo":      image_url,   # Telegram fetches this itself
+                "caption":    caption,
                 "parse_mode": "Markdown",
             },
-            timeout=30,
+            timeout=10,   # just waiting for Telegram to ACK, not for image generation
         )
-        r.raise_for_status()
-        return True
+        data = r.json()
+        if not data.get("ok"):
+            raise Exception(data.get("description", "Unknown error"))
     except Exception as e:
-        logger.error("Telegram sendPhoto error: %s", e)
-        return False
+        logger.error("tg_send_photo_url error: %s", e)
+        tg_send(chat_id, "⚠️ Image generated but Telegram couldn't load it. Try again!")
 
 # ─────────────────────────── IMAGE GENERATION ─────────────────────────────────
 
 def generate_image(prompt: str, chat_id: int) -> None:
-    """Generate image using Pollinations.ai and send to Telegram."""
+    """
+    Generate image using Pollinations.ai.
 
+    KEY FIX: We do NOT download the image in Vercel.
+    We just build the URL and pass it to Telegram's sendPhoto.
+    Telegram fetches the image from Pollinations directly.
+    Vercel only sends a short API call — well within 10s timeout.
+    """
     if not prompt.strip():
-        tg_send(chat_id, "⚠️ Please provide a prompt!\n\nExample: `/image a cute dog playing in park`")
+        tg_send(chat_id,
+            "⚠️ Please provide a prompt!\n\n"
+            "*Example:*\n`/image a cute dog playing in park`"
+        )
         return
 
-    # Show camera spinner
-    tg_upload_photo(chat_id)
-    tg_send(chat_id, f"🎨 Generating image for: *{prompt}*\nPlease wait a moment...")
+    tg_upload_photo_action(chat_id)
 
-    # Build Pollinations.ai URL
-    # Format: https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true
-    encoded_prompt = urllib.parse.quote(prompt)
+    # Build Pollinations.ai URL — Telegram will fetch this
+    encoded = urllib.parse.quote(prompt.strip())
     image_url = (
-        f"https://image.pollinations.ai/prompt/{encoded_prompt}"
-        f"?width=1024&height=1024&nologo=true&enhance=true"
+        f"https://image.pollinations.ai/prompt/{encoded}"
+        f"?width=1024&height=1024&nologo=true&enhance=true&seed={abs(hash(prompt)) % 99999}"
     )
 
-    try:
-        # Verify image is accessible
-        r = requests.get(image_url, timeout=55, stream=True)
-        r.raise_for_status()
-
-        # Send photo to Telegram
-        success = tg_send_photo(
-            chat_id,
-            image_url,
-            caption=f"🖼 *{prompt}*\n\n_Generated by DexMind × Pollinations.ai_"
-        )
-
-        if not success:
-            tg_send(chat_id, "⚠️ Image generated but couldn't send. Try again!")
-
-    except requests.Timeout:
-        tg_send(chat_id, "⏱ Image generation timed out. Please try again with a simpler prompt.")
-    except Exception as e:
-        logger.error("Image generation error: %s", e)
-        tg_send(chat_id, "⚠️ Couldn't generate image right now. Please try again!")
+    # Send directly — Telegram handles the slow image fetch, not Vercel
+    tg_send_photo_url(
+        chat_id,
+        image_url,
+        caption=f"🖼 *{prompt}*\n_Generated by DexMind × Pollinations.ai_ ✨"
+    )
 
 # ─────────────────────────── WEATHER HELPER ───────────────────────────────────
 
@@ -162,8 +153,7 @@ def get_weather(text: str) -> str:
     m = _LOCATION_RE.search(text)
     loc = m.group(1).strip() if m else ""
     try:
-        url = f"https://wttr.in/{urllib.parse.quote(loc)}?format=3"
-        r = requests.get(url, timeout=6)
+        r = requests.get(f"https://wttr.in/{urllib.parse.quote(loc)}?format=3", timeout=6)
         r.raise_for_status()
         return f"[Live weather: {r.text.strip()}]"
     except Exception:
@@ -221,8 +211,7 @@ def ai_reply(user_id: int, user_text: str) -> str:
             timeout=25,
         )
         r.raise_for_status()
-        data  = r.json()
-        reply = data["choices"][0]["message"]["content"].strip()
+        reply = r.json()["choices"][0]["message"]["content"].strip()
         history.append({"role": "assistant", "content": reply})
         return reply or "⚠️ Empty response. Try again."
 
@@ -320,8 +309,7 @@ def process_update(data: dict) -> None:
     elif text.startswith("/developer"):
         handle_developer(chat_id)
     elif text.startswith("/image"):
-        # Extract prompt after /image
-        prompt = text[6:].strip()  # remove "/image"
+        prompt = text[6:].strip()
         generate_image(prompt, chat_id)
     else:
         tg_typing(chat_id)
@@ -361,6 +349,6 @@ class handler(BaseHTTPRequestHandler):
 
         except Exception as e:
             logger.error("Webhook error: %s", e)
-            self.send_response(200)  # always 200 to Telegram
+            self.send_response(200)
             self.end_headers()
             self.wfile.write(b"OK")
