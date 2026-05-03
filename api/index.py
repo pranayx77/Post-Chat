@@ -20,7 +20,7 @@ import requests
 
 TELEGRAM_TOKEN     = os.getenv("TELEGRAM_TOKEN", "")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-MODEL              = os.getenv("MODEL", "mistralai/mistral-7b-instruct:free")
+MODEL              = os.getenv("MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
 WEBHOOK_SECRET     = os.getenv("WEBHOOK_SECRET", "dexmind_secret")
 
 BOT_NAME     = "DexMind"
